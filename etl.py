@@ -74,7 +74,7 @@ def process_log_data(spark, input_data, output_data):
     # read in song data to use for songplays table
     song_df = 
 
-    # extract columns from joined song and log datasets to create songplays table 
+    # extract columns from joined song and log datasets to create songplays table
     songplays_table = 
 
     # write songplays table to parquet files partitioned by year and month
@@ -85,8 +85,8 @@ def main():
     spark = create_spark_session()
     input_data = "s3a://udacity-dend/"
     output_data = ""
-    
-    process_song_data(spark, input_data, output_data)    
+
+    process_song_data(spark, input_data, output_data)
     process_log_data(spark, input_data, output_data)
 
 
