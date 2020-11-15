@@ -3,7 +3,9 @@ from datetime import datetime
 import os
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import udf, col
-from pyspark.sql.functions import year, month, dayofmonth, hour, weekofyear, date_format
+import pyspark.sql.functions as F
+from pyspark.sql.types import TimestampType
+from pyspark.sql.functions import year, month, dayofmonth, hour, weekofyear, date_format, dayofweek
 
 
 config = configparser.ConfigParser()
@@ -23,50 +25,89 @@ def create_spark_session():
 
 def process_song_data(spark, input_data, output_data):
     # get filepath to song data file
-    song_data = 
-    
+    song_data = input_data + "song_data/*/*/*"
+
     # read song data file
-    df = 
+    df = spark.read.json(song_data)
 
     # extract columns to create songs table
-    songs_table = 
-    
+    songs_table = df.select('song_id, title, artist_id, year, duration').\
+        dropDuplicates()
+
     # write songs table to parquet files partitioned by year and artist
-    songs_table
+    songs_table.write.partitionBy('year', 'artist_id').parquet(
+        output_data + 'songs/songs.parquet',
+        'overwrite'
+    )
+
+    # renaming columns
+    df = df.withColumnRenamed('artist_name', 'name').\
+        withColumnRenamed('artist_location', 'location').\
+        withColumnRenamed('artist_latitude', 'latitude').\
+        withColumnRenamed('artist_longitude', 'longitude').\
+        dropDuplicates()
+
+    # write artists table to parquet files
+    artists_table.createOrReplaceTempView('artists')
 
     # extract columns to create artists table
-    artists_table = 
-    
-    # write artists table to parquet files
-    artists_table
+    artists_table = df.select('artist_id', 'artist_name', 'artist_location',
+                              'artist_latitude', 'artist_longitude')
+
+    artists_table.write.parquet(
+        output_data + 'artists/artists.parquet',
+        'overwrite'
+    )
 
 
 def process_log_data(spark, input_data, output_data):
     # get filepath to log data file
-    log_data =
+    log_data = input_data + "log_data/*"
 
     # read log data file
-    df = 
-    
-    # filter by actions for song plays
-    df = 
+    df = spark.read.json(log_data)
 
-    # extract columns for users table    
-    artists_table = 
-    
+    # filter by actions for song plays
+    df_actions = df.filter(df.page == 'NextSong').\
+        select('ts', 'userId', 'level', 'song', 'artist',
+               'sessionId', 'location', 'userAgent')
+
+    # extract columns for users table
+    users_table = df.select('userId', 'firstName', 'lastName',
+                            'gender', 'level').dropDuplicates()
+
     # write users table to parquet files
-    artists_table
+    users_table.createOrReplaceTempView('users')
+    users_table.write.parquet(
+        output_data + 'users/users.parquet',
+        'overwrite'
+    )
 
     # create timestamp column from original timestamp column
-    get_timestamp = udf()
-    df = 
-    
+    get_timestamp = udf(lambda ts: datetime.datetime.fromtimestamp(x / 1000),
+                        TimestampType())
+    df_actions = df_actions.withColumn(
+        'timestamp',
+        get_timestamp(df_actions.ts)
+    )
+
     # create datetime column from original timestamp column
-    get_datetime = udf()
-    df = 
-    
+    get_datetime = udf(lambda x: F.to_date(x), TimestampType())
+    df_actions = df_actions.withColumn(
+        'start_time',
+        get_datetime(df_actions.ts)
+    )
+
     # extract columns to create time table
-    time_table = 
+    time_table = actions_df.select('datetime') \
+                        .withColumn('start_time', actions_df.datetime) \
+                        .withColumn('hour', hour('datetime')) \
+                        .withColumn('day', dayofmonth('datetime')) \
+                        .withColumn('week', weekofyear('datetime')) \
+                        .withColumn('month', month('datetime')) \
+                        .withColumn('year', year('datetime')) \
+                        .withColumn('weekday', dayofweek('datetime')) \
+                        .dropDuplicates()
     
     # write time table to parquet files partitioned by year and month
     time_table
